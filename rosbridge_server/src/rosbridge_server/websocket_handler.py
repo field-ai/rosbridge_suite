@@ -121,7 +121,15 @@ class IncomingQueue(threading.Thread):
 
             self.protocol.incoming(msg)
 
-        self.protocol.finish()
+        # Schedule protocol cleanup on the executor thread to avoid racing
+        # with the executor's wait set construction. Destroying ROS entities
+        # (subscriptions, publishers, services) from a non-executor thread
+        # while the executor is spinning causes InvalidHandle errors.
+        executor = self.protocol.node_handle.executor
+        if executor is not None:
+            executor.create_task(self.protocol.finish)
+        else:
+            self.protocol.finish()
 
 
 class RosbridgeWebSocket(WebSocketHandler):

@@ -295,10 +295,25 @@ class PublisherManager:
         self.unregister_timers[topic].start()
 
     def _unregister_impl(self, topic: str) -> None:
+        if topic not in self._publishers:
+            self.unregister_timers.pop(topic, None)
+            return
         if not self._publishers[topic].has_clients():
-            self._publishers[topic].unregister()
-            del self._publishers[topic]
-        del self.unregister_timers[topic]
+            node_handle = self._publishers[topic].node_handle
+            executor = getattr(node_handle, "executor", None) if node_handle else None
+            if executor is not None:
+                # Schedule destruction on the executor thread to avoid racing
+                # with the executor's wait set construction.
+                def _destroy(t: str = topic) -> None:
+                    if t in self._publishers and not self._publishers[t].has_clients():
+                        self._publishers[t].unregister()
+                        del self._publishers[t]
+
+                executor.create_task(_destroy)
+            else:
+                self._publishers[topic].unregister()
+                del self._publishers[topic]
+        self.unregister_timers.pop(topic, None)
 
     def unregister_all(self, client_id: str) -> None:
         """
