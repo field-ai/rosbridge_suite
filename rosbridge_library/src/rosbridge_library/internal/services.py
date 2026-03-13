@@ -155,12 +155,38 @@ def call_service(
     # Populate the instance with the provided args
     args_to_service_request_instance(inst, args)
 
-    client: Client = node_handle.create_client(
-        service_class, service, callback_group=ReentrantCallbackGroup()
-    )
+    executor = getattr(node_handle, "executor", None)
+
+    # Create the client on the executor thread so it is safely included in the
+    # executor's wait-set without racing against _wait_for_ready_callbacks
+    # iterating over node._clients.  The same applies to destroy_client below.
+    if executor is not None:
+        create_done = Event()
+        client_holder: list[Client | None] = [None]
+
+        def _create_client() -> None:
+            client_holder[0] = node_handle.create_client(
+                service_class, service, callback_group=ReentrantCallbackGroup()
+            )
+            create_done.set()
+
+        executor.create_task(_create_client)
+        create_done.wait()
+        client: Client = client_holder[0]  # type: ignore[assignment]
+        assert client is not None
+    else:
+        client: Client = node_handle.create_client(
+            service_class, service, callback_group=ReentrantCallbackGroup()
+        )
+
+    def _destroy_client() -> None:
+        node_handle.destroy_client(client)
 
     if not client.wait_for_service(server_ready_timeout):
-        node_handle.destroy_client(client)
+        if executor is not None:
+            executor.create_task(_destroy_client)
+        else:
+            node_handle.destroy_client(client)
         raise InvalidServiceException(service)
 
     future = client.call_async(inst)
@@ -173,13 +199,20 @@ def call_service(
 
     if not event.wait(timeout=(server_response_timeout if server_response_timeout > 0 else None)):
         future.cancel()
-        node_handle.destroy_client(client)
+        if executor is not None:
+            executor.create_task(_destroy_client)
+        else:
+            node_handle.destroy_client(client)
         msg = "Timeout exceeded while waiting for service response"
         raise Exception(msg)
 
-    node_handle.destroy_client(client)
-
+    # Get the result before destroying the client
     result = future.result()
+
+    if executor is not None:
+        executor.create_task(_destroy_client)
+    else:
+        node_handle.destroy_client(client)
 
     if result is not None:
         # Turn the response into JSON and pass to the callback
