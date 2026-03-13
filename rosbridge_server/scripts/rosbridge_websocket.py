@@ -248,6 +248,27 @@ class RosbridgeWebsocketNode(Node):
                 time.sleep(self.retry_startup_delay)
 
 
+def _spin_with_recovery(executor: SingleThreadedExecutor | EventsExecutor, node: Node) -> None:
+    """Spin the executor, recovering from InvalidHandle errors caused by client disconnects.
+
+    When a WebSocket client disconnects, capability cleanup may destroy ROS2 handles
+    while the executor is still referencing them in its wait set. This race condition
+    in rclpy causes an InvalidHandle exception that kills the spin thread. We catch it
+    and resume spinning to keep the node alive.
+    """
+    while True:
+        try:
+            executor.spin()
+            break  # Normal exit via executor.shutdown()
+        except Exception as e:
+            if "Destroyable" in str(e) or "destruction" in str(e).lower():
+                node.get_logger().warning(
+                    "Executor encountered a destroyed handle during spin, recovering."
+                )
+                continue
+            raise
+
+
 async def async_main() -> None:
     rclpy.init(args=sys.argv, signal_handler_options=rclpy.signals.SignalHandlerOptions.NO)
 
@@ -260,7 +281,7 @@ async def async_main() -> None:
 
     executor.add_node(node)
 
-    spin_thread = threading.Thread(target=executor.spin)
+    spin_thread = threading.Thread(target=_spin_with_recovery, args=(executor, node))
     spin_thread.start()
 
     loop = asyncio.get_running_loop()
