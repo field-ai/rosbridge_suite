@@ -22,6 +22,12 @@ install(FILES
 
 if(BUILD_TESTING)
   find_package(launch_testing_ament_cmake REQUIRED)
+  find_package(ament_cmake_pytest REQUIRED)
+
+  # Unit tests (pytest)
+  ament_add_pytest_test(test_destruction_race "test/test_destruction_race.py"
+    TIMEOUT 60
+  )
 
   # Run each test with both SingleThreadedExecutor and EventsExecutor
   set(TEST_FILES
