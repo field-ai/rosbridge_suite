@@ -324,16 +324,6 @@ class Protocol:
         for capability in self.capabilities:
             capability.finish()
 
-        # Clean up externally advertised services
-        for service_handler in list(self.external_service_list.values()):
-            service_handler.graceful_shutdown()
-        self.external_service_list.clear()
-
-        # Clean up externally advertised actions
-        for action_handler in list(self.external_action_list.values()):
-            action_handler.graceful_shutdown()
-        self.external_action_list.clear()
-
     def serialize(
         self,
         msg: bytearray | bson.BSON | dict[str, Any],
