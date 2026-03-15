@@ -171,7 +171,9 @@ def call_service(
             create_done.set()
 
         executor.create_task(_create_client)
-        create_done.wait()
+        if not create_done.wait(timeout=5.0):
+            msg = "Timeout waiting for executor to create service client (executor may be blocked)"
+            raise RuntimeError(msg)
         client: Client = client_holder[0]  # type: ignore[assignment]
         assert client is not None
     else:

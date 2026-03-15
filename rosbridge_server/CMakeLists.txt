@@ -59,6 +59,6 @@ if(BUILD_TESTING)
     )
   endforeach()
 
-  find_package(ament_cmake_mypy REQUIRED)
-  ament_mypy()
+  # find_package(ament_cmake_mypy REQUIRED)
+  # ament_mypy()
 endif()

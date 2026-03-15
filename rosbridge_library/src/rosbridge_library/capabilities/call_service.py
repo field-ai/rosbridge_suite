@@ -33,12 +33,15 @@
 from __future__ import annotations
 
 import fnmatch
+import logging
 from functools import partial
 from threading import Thread
 from typing import TYPE_CHECKING, Any
 
 from rosbridge_library.capability import Capability
 from rosbridge_library.internal.services import ServiceCaller
+
+_logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from rosbridge_library.protocol import Protocol
@@ -69,8 +72,19 @@ class CallService(Capability):
         if self.call_services_in_new_thread:
             # Calls the service in a separate thread so multiple services can be processed simultaneously.
             protocol.node_handle.get_logger().info("Calling services in new thread")
+
+            def _threaded_call_service(msg: dict[str, Any]) -> None:
+                try:
+                    self.call_service(msg)
+                except Exception:
+                    _logger.exception(
+                        "Unhandled exception in threaded call_service for id=%s",
+                        msg.get("id"),
+                    )
+
             protocol.register_operation(
-                "call_service", lambda msg: Thread(target=self.call_service, args=(msg,)).start()
+                "call_service",
+                lambda msg: Thread(target=_threaded_call_service, args=(msg,)).start(),
             )
         else:
             # Calls the service in this thread, so services block and must be processed sequentially.
