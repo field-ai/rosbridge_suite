@@ -37,7 +37,7 @@ def _advertise_msg(topic: str) -> str:
     return json.dumps({"op": "advertise", "topic": topic, "type": "std_msgs/msg/String"})
 
 
-class TestDestructionRace(unittest.TestCase):
+class TestStressClients(unittest.TestCase):
     """
     Verify that entity destruction during protocol cleanup does not crash
     the executor.

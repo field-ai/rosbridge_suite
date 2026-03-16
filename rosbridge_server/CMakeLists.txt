@@ -25,7 +25,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_pytest REQUIRED)
 
   # Unit tests (pytest)
-  ament_add_pytest_test(test_destruction_race "test/test_destruction_race.py"
+  ament_add_pytest_test(test_stress_clients "test/test_stress_clients.py"
     TIMEOUT 60
   )
 
